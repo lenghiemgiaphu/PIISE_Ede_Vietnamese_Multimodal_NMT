@@ -1,0 +1,152 @@
+import matplotlib.pyplot as plt
+
+# 1. Khai báo dữ liệu từ bảng của bạn
+steps = [
+    10,
+    20,
+    30,
+    40,
+    50,
+    60,
+    70,
+    80,
+    90,
+    100,
+    110,
+    120,
+    130,
+    140,
+    150,
+    160,
+    170,
+    180,
+    190,
+    200,
+    210,
+    220,
+    230,
+    240,
+    250,
+    260,
+    270,
+    280,
+    290,
+    300,
+    310,
+    320,
+    328,
+]
+
+train_loss = [
+    46.814508,
+    38.217593,
+    33.429977,
+    32.886606,
+    30.587344,
+    28.792108,
+    30.721704,
+    27.937109,
+    25.109312,
+    26.568933,
+    25.933313,
+    25.063326,
+    24.992090,
+    25.030992,
+    24.331142,
+    23.889365,
+    21.927032,
+    22.737352,
+    22.179053,
+    21.611839,
+    22.222165,
+    23.468103,
+    22.197279,
+    22.006296,
+    21.386676,
+    21.146927,
+    22.589058,
+    20.235677,
+    19.947505,
+    21.556740,
+    19.929645,
+    21.089410,
+    21.089410,
+]
+
+val_loss = [
+    4.709266,
+    4.172891,
+    3.845987,
+    3.687745,
+    3.570154,
+    3.469908,
+    3.400783,
+    3.331711,
+    3.271252,
+    3.218207,
+    3.167381,
+    3.121981,
+    3.096476,
+    3.077416,
+    3.051806,
+    3.019069,
+    3.007921,
+    2.991013,
+    2.981768,
+    2.963913,
+    2.950593,
+    2.938401,
+    2.923971,
+    2.913197,
+    2.909663,
+    2.908817,
+    2.905199,
+    2.900271,
+    2.895063,
+    2.892697,
+    2.890377,
+    2.888699,
+    2.888436,
+]
+
+# 2. Cấu hình và vẽ biểu đồ
+plt.figure(figsize=(10, 6))
+
+# Vẽ đường Training Loss (Màu xanh dương) và Validation Loss (Màu đỏ)
+plt.plot(
+    steps,
+    train_loss,
+    color='blue',
+    linestyle='-',
+    marker='o',
+    markersize=4,
+    label='Training Loss',
+)
+plt.plot(
+    steps,
+    val_loss,
+    color='red',
+    linestyle='-',
+    marker='s',
+    markersize=4,
+    label='Validation Loss',
+)
+
+# 3. Thêm các thông tin tiêu đề và nhãn trục
+plt.title(
+    'Biểu đồ Training Loss và Validation Loss theo từng Step', fontsize=14
+)
+plt.xlabel('Step', fontsize=12)
+plt.ylabel('Loss Value', fontsize=12)
+
+# Hiển thị chú thích (Legend) ở vị trí phù hợp
+plt.legend(fontsize=11)
+
+# Thêm lưới tọa độ (Grid) giúp dễ quan sát giá trị
+plt.grid(True, linestyle='--', alpha=0.6)
+
+# Tự động căn chỉnh vừa vặn khung hình
+plt.tight_layout()
+
+# Hiển thị biểu đồ ra màn hình
+plt.show()
