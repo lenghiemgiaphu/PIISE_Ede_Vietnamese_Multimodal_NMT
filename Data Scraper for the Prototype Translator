@@ -1,0 +1,73 @@
+import requests
+from bs4 import BeautifulSoup
+import csv
+import re
+
+danh_sach_link = [
+    "https://vov4.vov.vn/ede/klei-mrao-yang-uon-thoi-su-xa-hoi/khua-knuk-kna-le-minh-hung-nao-cua-ala-car-lao-leh-anan-campuchia-530661.vov4",
+    "https://vov4.vov.vn/ede/brua-nga-lo-hma-nha-nong/dak-lak-mtrut-mdi-pui-kmla-eran-hong-ai-angin-mjing-boh-kdrut-di-kyar-mtah-530643.vov4",
+    "https://vov4.vov.vn/ede/klei-mrao-yang-uon-thoi-su-xa-hoi/klei-bi-kbin-kreh-knhao-leh-anan-kdrap-mrao-ciang-mdi-kyar-kjap-dui-mko-mjing-ti-quy-nhon-gia-lai-530663.vov4",
+    "https://vov4.vov.vn/ede/klei-mrao-yang-uon-thoi-su-xa-hoi/ba-ebeh-2200-mta-klang-ling-kahan-djie-engia-mong-quang-ngai-ba-ko-ha-noi-ksiem-mka-and-530728.vov4",
+    "https://vov4.vov.vn/ede/klei-mrao-yang-uon-thoi-su-xa-hoi/mjuh-rue-klei-bi-kbin-tal-4-anok-krie-dlang-brua-dang-gul-dlong-tal-xiv-530877.vov4",
+    "https://vov4.vov.vn/ede/klei-mrao-yang-uon-thoi-su-xa-hoi/khua-anok-brua-hdra-elan-gul-dlong-nguyen-thanh-nghi-drong-epul-bi-ala-knua-druh-gul-dlong-russia-530859.vov4",
+    "https://vov4.vov.vn/ede/klei-mrao-yang-uon-thoi-su-xa-hoi/dak-lak-pok-mlar-klei-gal-mdi-kyar-ko-mnuih-buon-sang-mong-klei-bi-mlih-mro-530858.vov4",
+    "https://vov4.vov.vn/ede/klei-mrao-yang-uon-thoi-su-xa-hoi/khua-knuk-kna-le-minh-hung-bi-trong-hong-khua-knuk-kna-lao-saleumxay-kommasith-530857.vov4",
+    "https://vov4.vov.vn/ede/hdra-mtrun-leh-anan-klei-hdip-chinh-sach-cuoc-song/gia-lai-mghaih-msir-klei-gun-kpak-ciang-ko-mnuih-buon-sang-kring-dleh-dlan-mao-hra-dui-mgat-edeh-530863.vov4",
+    "https://vov4.vov.vn/ede/hdra-mtrun-leh-anan-klei-hdip-chinh-sach-cuoc-song/tui-hlue-klei-bi-knal-mong-kahan-hdap-73-thun-buh-klang-phung-djie-engia-leh-ebeh-50-thun-ti-dak-lak-530860.vov4",
+    "https://vov4.vov.vn/ede/hdra-mtrun-leh-anan-klei-hdip-chinh-sach-cuoc-song/epul-k52-lo-dong-bi-kbin-lu-klang-ling-kahan-djie-engia-ti-campuchia-leh-anan-gia-lai-530793.vov4",
+    "https://vov4.vov.vn/ede/hdra-mtrun-leh-anan-klei-hdip-chinh-sach-cuoc-song/epul-k52-kuai-ma-2-klang-ling-kahan-djie-engia-ti-ia-dom-gia-lai-530537.vov4",
+    "https://vov4.vov.vn/ede/brua-nga-lo-hma-nha-nong/adie-hjan-prong-sui-nga-ko-durian-ti-sa-sa-ti-gia-lai-djie-lu-530111.vov4",
+    "https://vov4.vov.vn/ede/brua-nga-lo-hma-nha-nong/dak-lak-mdi-ktang-ksiem-dlang-klei-doh-ebat-mnong-dhong-lo-hma-ba-chi-ko-eu-530108.vov4",
+    "https://vov4.vov.vn/ede/klei-suaih-pral-suc-khoe/brua-mdrao-mgun-lan-dap-kngu-mdi-hdra-ksiem-dlang-dru-gang-mkhu-mdrong-hong-klei-rua-engoh-bi-ble-erah-530862.vov4",
+    "https://vov4.vov.vn/ede/dhar-kreh-van-hoa/nao-ti-phu-thien-gia-lai-dlang-tong-cing-char-530969.vov4",
+    "https://vov4.vov.vn/ede/dhar-kreh-van-hoa/klei-ka-thao-hlam-anok-msat-dum-ti-cu-a-man-530948.vov4",
+    "https://vov4.vov.vn/ede/dhar-kreh-van-hoa/knam-nga-yang-yan-hla-luh-leh-anan-bi-hdor-ko-phun-agha-brua-mkra-hra-ti-tuyet-diem-530861.vov4",
+    "https://vov4.vov.vn/ede/dhar-kreh-van-hoa/brua-dang-car-lam-dong-bi-tuom-hong-phung-khua-kia-krie-klei-dao-balamon-bri-wung-knam-moak-kate-530741.vov4",
+    "https://vov4.vov.vn/ede/dhar-kreh-van-hoa/11-car-bi-kbin-lar-bra-knhuah-gru-dhar-kreh-mong-ti-dien-bien-530792.vov4",
+    "https://vov4.vov.vn/ede/klei-suaih-pral-suc-khoe/cong-po-gang-mkhu-klei-rua-asao-mieo-kho-ke-mong-yang-buon-530024.vov4",
+    "https://vov4.vov.vn/ede/dhar-kreh-van-hoa/po-mbrua-edah-edi-a-bang-po-lo-cue-enai-bro-djue-ana-sedang-530893.vov4"
+]
+
+def cao_cau_ede(url):
+    print(f"[*] Đang cào dữ liệu từ: {url}")
+    cau_list = []
+    try:
+        response = requests.get(url, timeout=10)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        paragraphs = soup.find_all('p')
+        for p in paragraphs:
+            text = p.get_text(strip=True)
+            
+            # Tách đoạn văn thành các câu riêng biệt dựa trên dấu chấm, chấm hỏi, chấm than
+            cac_cau_don = re.split(r'(?<=[.!?])\s+', text)
+            
+            for cau in cac_cau_don:
+                cau = cau.strip()
+                # Lọc bỏ các câu quá ngắn (dưới 30 ký tự) hoặc chứa cụm từ rác
+                if len(cau) > 30 and "Giấy phép báo" not in cau:
+                    cau_list.append(cau)
+                    
+    except Exception as e:
+        print(f"Lỗi khi cào link: {e}")
+    return cau_list
+
+file_out = "cau_tieng_ede_raw.csv"
+
+print("🚀 BẮT ĐẦU CÀO CÁC CÂU TIẾNG Ê ĐÊ SẠCH...\n")
+
+count = 0
+with open(file_out, mode='w', newline='', encoding='utf-8-sig') as f:
+    writer = csv.writer(f)
+    writer.writerow(['id', 'text_ede'])
+    
+    for link in danh_sach_link:
+        ds_cau = cao_cau_ede(link)
+        for cau in ds_cau:
+            if "Giấy phép" not in cau:
+                count += 1
+                writer.writerow([count, cau])
+
+print(f"\n🎉 HOÀN THÀNH! Đã thu thập được {count} câu Tiếng Ê Đê SẠCH.")
+print(f"📁 Tệp được lưu tại: {file_out}")
