@@ -117,7 +117,9 @@ No controlled comparison against other proxy codes was run (see §7).
 
 Training minimizes the token-level cross-entropy
 
-$$\mathcal{L}(\theta) = -\frac{1}{T}\sum_{t=1}^{T}\log p_{\theta}\left(y_t \mid y_{<t}, \, x\right)$$
+$$
+\mathcal{L}(\theta) = -\frac{1}{T}\sum_{t=1}^{T}\log p_{\theta}\left(y_t \mid y_{<t}, \, x\right)
+$$
 
 and gradient accumulation gives an effective batch size $B_{\text{eff}} = 1 \times 8 = 8$ while keeping peak GPU memory at the batch-size-1 level.
 
