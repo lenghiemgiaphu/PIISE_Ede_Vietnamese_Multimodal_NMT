@@ -9,7 +9,7 @@ PIISE Research Program — Board B (Research Idea) | Pho Thong Nang Khieu (PTNK)
 [![Python](https://img.shields.io/badge/Python-3.x-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Transformers](https://img.shields.io/badge/Hugging%20Face-Transformers-FFD21E?style=flat-square&logo=huggingface&logoColor=black)](https://huggingface.co/docs/transformers)
 [![Base Model](https://img.shields.io/badge/Base%20Model-NLLB--200%20distilled%20600M-0467DF?style=flat-square)](https://huggingface.co/facebook/nllb-200-distilled-600M)
-[![SacreBLEU](https://img.shields.io/badge/SacreBLEU-12.46-16A34A?style=flat-square)](#4-key-results--benchmarks)
+[![SacreBLEU](https://img.shields.io/badge/SacreBLEU%20%28in--sample%2C%2015%20sentences%29-12.46-16A34A?style=flat-square)](#34-evaluation)
 [![Val Loss](https://img.shields.io/badge/Validation%20Loss-4.709%20%E2%86%92%202.888-2563EB?style=flat-square)](#4-key-results--benchmarks)
 [![Status](https://img.shields.io/badge/Status-Proof%20of%20Concept-F59E0B?style=flat-square)](#7-scope-limitations--caveats)
 
@@ -28,7 +28,7 @@ Ede is an Austronesian (Chamic) language spoken by roughly 400,000 people in the
 1. **Closed-loop data pipeline:** scraping of public Ede-language news → Unicode NFC normalization → LLM-assisted Ede–Vietnamese pairing → bidirectional augmentation (**408 pairs → 816 training samples**; corpus composition in §3.1).
 2. **Proxy-language fine-tuning:** Ede has no NLLB language token, so Indonesian (`ind_Latn`) is used as the source-side proxy and Vietnamese (`vie_Latn`) as the target, fine-tuning `facebook/nllb-200-distilled-600M`.
 3. **Memory-bounded training recipe:** batch size 1 × gradient accumulation 8 with fp16 trains the 600M-parameter model on a single Colab T4 (16 GB) without out-of-memory errors.
-4. **Quantified result:** validation loss falls from 4.709 to 2.888 over 328 optimizer steps; SacreBLEU reaches **12.46 / 100**. Qualitative analysis shows the model is **not yet reliable at sentence level** (see §4.3 and §7).
+4. **Quantified result:** validation loss falls from 4.709 to 2.888 over 328 optimizer steps; SacreBLEU is **12.46 / 100**, measured on the first 15 corpus sentences, which were **not held out** from training (§3.4). Neither figure is a clean held-out estimate (§7), and qualitative analysis shows the model is **not yet reliable at sentence level** (§4.3).
 
 > **Scope.** The proposal describes a multimodal system (Text-to-Text + Text-to-Speech). Only the text-to-text component and a Gradio demo are implemented here; VITS-based speech synthesis is **planned, not built** (see Roadmap in §7).
 
@@ -96,7 +96,7 @@ Ede is an Austronesian (Chamic) language spoken by roughly 400,000 people in the
 
 ### 3.2 Proxy Language Code
 
-NLLB-200 covers 200 languages but has no token for Ede. A zero-shot probe on a CPU run confirmed two things: the tokenizer splits Ede text without font or character errors, but the untuned model essentially **copies** its input (it changed only the first letter of the test sentence). The fine-tuning setup therefore sets:
+NLLB-200 covers 200 languages but has no token for Ede. A zero-shot probe on a CPU run confirmed two things: the tokenizer splits Ede text without font or character errors, but the untuned model essentially **copies** its input (`Klei čih pioh hriăm ti hră` became `Clei čih pioh hriăm ti hră`, a change of the first letter only). The fine-tuning setup therefore sets:
 
 - `src_lang = "ind_Latn"` — Indonesian, a Latin-script Austronesian language, used as a stand-in so that the model can learn a new vocabulary under an existing language embedding;
 - `tgt_lang = "vie_Latn"` — Vietnamese.
@@ -113,6 +113,8 @@ No controlled comparison against other proxy codes was run (see §7).
 | Precision | fp16 |
 | Per-device batch size | 1 |
 | Gradient accumulation | 8 steps (effective batch size 8) |
+| Memory settings | Gradient checkpointing; maximum sequence length 128 tokens |
+| Data split | The 816 samples are shuffled (seed 42) and split 80/20 at the sample level: 652 train / 164 evaluation |
 | Training length | 4 epochs = 328 optimizer steps (82 per epoch) |
 | Logging / evaluation interval | every 10 steps |
 | Hardware | Google Colab, NVIDIA T4 (16 GB VRAM) |
@@ -123,6 +125,8 @@ $$\mathcal{L}(\theta) = -\frac{1}{T}\sum_{t=1}^{T}\log p_{\theta}\left(y_t \mid 
 
 and gradient accumulation gives an effective batch size $B_{\text{eff}} = 1 \times 8 = 8$ while keeping peak GPU memory at the batch-size-1 level.
 
+> **Leakage note.** The two directions of a pair are separate samples and the split ignores pair identity. For most evaluation samples the reversed version of the same pair is therefore in the training set, so the reported validation loss is optimistic and is not a strictly held-out measure (§7).
+
 ### 3.4 Evaluation
 
 Translation quality is measured with SacreBLEU (`evaluate.load("sacrebleu")`):
@@ -130,6 +134,8 @@ Translation quality is measured with SacreBLEU (`evaluate.load("sacrebleu")`):
 $$\text{BLEU} = BP \cdot \exp\left(\sum_{n=1}^{N} w_n \ln p_n\right), \qquad BP = \begin{cases} 1, & c > r \\ e^{1 - r/c}, & c \le r \end{cases}$$
 
 where $p_n$ is the modified $n$-gram precision, $c$ the candidate length and $r$ the reference length. Training dynamics are tracked through training and validation loss logged every 10 steps.
+
+**Protocol actually used (final cell of the notebook).** The first 15 rows of `ede_vi_parallel_corpus.csv` (IDs 001–015, Ede → Vietnamese only) are translated with `model.generate(max_length=128)` and compared with one reference each. These rows were not excluded from fine-tuning, and the random 80/20 split means most of them were probably in the training portion. The score therefore measures fit to seen data, not generalization.
 
 ---
 
@@ -141,9 +147,9 @@ where $p_n$ is the modified $n$-gram precision, $c$ the candidate length and $r$
 | :--- | :--- | :---: | :--- | :---: |
 | Zero-shot (untuned) | — | — | — | not quantified; output ≈ copy of input |
 | **Stage 1 — pilot** | 30 sentences | 10 epochs | 3.883 (epoch 1) → min 3.704 (epoch 3) → 3.843 (epoch 10) | 9.39 *(logged 4 Oct 2026)* |
-| **Stage 2 — scaled** | 408 pairs → 816 samples | 4 epochs / 328 steps | **4.709 (step 10) → 2.888 (step 328)** | **12.46** |
+| **Stage 2 — scaled** | 408 pairs → 816 samples | 4 epochs / 328 steps | **4.709 (step 10) → 2.888 (step 328)** | **12.46** *(15 corpus sentences, not held out)* |
 
-The pilot's training loss fell from 4.03 to 1.86 while validation loss stopped improving after epoch 3 and drifted upward — mild overfitting on a 30-sentence set, which motivated the data pipeline. The proposal's success criterion (BLEU > 12/100) is met by a narrow margin.
+The pilot's training loss fell from 4.03 to 1.86 while validation loss stopped improving after epoch 3 and drifted upward — mild overfitting on a 30-sentence set, which motivated the data pipeline. The proposal's success criterion (BLEU > 12/100) is met by a narrow margin, but only on sentences that were available during training, so it does not show that the model generalizes.
 
 ### 4.2 Loss Trajectory (Stage 2)
 
@@ -158,7 +164,7 @@ The pilot's training loss fell from 4.03 to 1.86 while validation loss stopped i
 | 300 | 21.56 | 2.69 | 2.893 |
 | 328 | 21.09 | 2.64 | 2.888 |
 
-**Reading the table.** The logged training loss is roughly eight times larger than the validation loss. This ratio equals `gradient_accumulation_steps`, which suggests the trainer reports the loss summed over the 8 accumulation micro-steps; the ÷ 8 column is a derived, comparable-scale view and is **not** a separately logged quantity. Validation loss decreases monotonically and flattens around 2.89 after step ≈ 250. The raw loss figure in [`results/`](./results/training_validation_loss_curve.png) plots the as-logged values, so its training and validation curves should not be read as being on the same scale.
+**Reading the table.** The logged training loss is roughly eight times larger than the validation loss. This ratio equals `gradient_accumulation_steps`, which suggests the trainer reports the loss summed over the 8 accumulation micro-steps; the ÷ 8 column is a derived, comparable-scale view and is **not** a separately logged quantity. Validation loss decreases monotonically and flattens around 2.89 after step ≈ 250. The raw loss figure in [`results/`](./results/training_validation_loss_curve.png) plots the as-logged values, so its training and validation curves should not be read as being on the same scale. Validation loss is also not strictly held-out (leakage note in §3.3).
 
 ### 4.3 Qualitative Analysis (Ede → Vietnamese, Stage 2 model)
 
@@ -167,7 +173,7 @@ The pilot's training loss fell from 4.03 to 1.86 while validation loss stopped i
 | *Mâo dŭm mnuih ƀuôn sang amâo thâo dlăng, thâo čih klei yuăn.* | Trong đó, các nhà đầu tư đã xác định cách xử lý các vấn đề, giải quyết các vấn đề. | Một số người dân không biết lái xe, cũng không biết các quy tắc giao thông. |
 | *Ară anei hlăm wăl anôk mnia mblei snăn hbâo pruê snăn djăp anôk, djăp mta* | Các cơ sở đã xác định cách thức sử dụng thuốc theo quy định của cơ sở và cơ sở. | Hiện nay trên thị trường, phân bón được bày bán ở khắp nơi với đủ mọi chủng loại. |
 
-The outputs are fluent Vietnamese but **semantically unfaithful**, with repeated phrases ("các vấn đề … các vấn đề", "của cơ sở và cơ sở"). Informal inspection through the web demo showed that some domain keywords (e.g. *sầu riêng*, *cà phê*, *cây trồng*) are captured, while sentence-level structure is not. A BLEU of 12.46 should therefore be read as evidence of partial lexical learning, not of usable translation quality.
+Both source sentences come from the corpus itself (IDs 062 and 388) and may have been seen during training; even so, the outputs are fluent Vietnamese but **semantically unfaithful**, with repeated phrases ("các vấn đề … các vấn đề", "của cơ sở và cơ sở"). Informal inspection through the web demo showed that some domain keywords (e.g. *sầu riêng*, *cà phê*, *cây trồng*) are captured, while sentence-level structure is not. A BLEU of 12.46 should therefore be read as evidence of partial lexical learning, not of usable translation quality.
 
 ---
 
@@ -224,7 +230,7 @@ Fine-tuning was run on a Google Colab **T4 GPU (16 GB)**. A local GPU with at le
 
 2. **Ede–Vietnamese pairs.** Pair labeling was done with the Gemini API and cross-checked by the team (§3.1). The labeling prompt and script are not part of `src/`; the resulting corpus is provided in `data/processed/`, so all downstream steps can be reproduced without repeating this step. Outputs of hosted LLM APIs change over time, so re-labeling would not reproduce the exact pairs.
 
-3. **Fine-tune and evaluate.** Open `notebooks/nllb200_ede_vi_finetune.ipynb` in Google Colab, select a **T4 GPU** runtime, and run all cells. The notebook uses the configuration in §3.3 and reports validation loss every 10 steps and SacreBLEU at the end.
+3. **Fine-tune and evaluate.** Open `notebooks/nllb200_ede_vi_finetune.ipynb` in Google Colab, select a **T4 GPU** runtime and run the cells in order: dependency installs, the zero-shot probe, the corpus upload (upload `data/processed/ede_vi_parallel_corpus.csv`; the cell renames it to `du_lieu_song_ngu.csv`), fine-tuning (§3.3, validation loss every 10 steps), the Gradio demo (a temporary public link), and the BLEU cell. The fine-tuned model is saved to `./nllb_2_chieu_hoan_chinh`; the demo and BLEU cells load it from `/content/drive/MyDrive/nllb_ede2vi_hoan_chinh`, so copy it to Google Drive first or edit `model_path`. The notebook installs `google-genai`, but the labeling code itself is not included.
 
 4. **Plot the loss curves** (run from the repository root; the figure is saved to `results/`):
 
@@ -242,7 +248,7 @@ The Ede text originates from publicly accessible VOV4 articles and is used stric
 
 1. **Corpus size, composition and domain.** 408 pairs, mostly from a single news outlet (economic, agricultural and social topics, written register). About a third (127 pairs) are short entries rather than full sentences (§3.1), so "408 pairs" should not be read as 408 news sentences. Results say nothing about conversational Ede or other orthographic conventions.
 2. **Silver-standard references.** The Vietnamese side was produced with Gemini assistance and cross-checked by the team. No validation by native Ede speakers or professional translators is documented, so BLEU measures agreement with these labels rather than with expert translations.
-3. **Thin evaluation.** A single aggregate BLEU (12.46) was computed over 15 evaluation batches, with no confidence interval, repeated seeds, or per-direction (Ede → Vietnamese vs. Vietnamese → Ede) breakdown. No numeric zero-shot BLEU was recorded, so the improvement over the base model is supported qualitatively (the untuned model copies its input), not quantitatively.
+3. **Evaluation is not held-out.** The single BLEU score (12.46) was computed on the first 15 corpus sentences (Ede → Vietnamese), which were not excluded from training (§3.4). There is no confidence interval, no repeated seeds and no Vietnamese → Ede evaluation. Validation loss uses a sample-level 80/20 split of the bidirectionally augmented data, so the reverse direction of most evaluation pairs was seen in training (§3.3). No numeric zero-shot BLEU was recorded, so the improvement over the base model is supported qualitatively (the untuned model copies its input), not quantitatively. Both numbers overstate generalization; a pair-level split and a fresh test set are the first task of Phase 2.
 4. **Poor sentence-level fidelity.** Outputs are fluent but often wrong and repetitive (§4.3).
 5. **Loss-scale artifact.** The logged training loss is not on the same scale as the validation loss (§4.2). Claims about the train/validation gap must use the normalized column, and the plot in `results/` should be regenerated with normalized values for any future report.
 6. **Proxy-code assumption.** Using `ind_Latn` for Ede rests on typological plausibility; no ablation against other codes (or a newly added language token) was performed.
@@ -252,7 +258,7 @@ The Ede text originates from publicly accessible VOV4 articles and is used stric
 
 | Phase | Planned work | Target |
 | :--- | :--- | :--- |
-| 2 — Data expansion (Nov–Dec 2026) | Scrape more VOV4 and Báo Đắk Lắk articles; back-translation and augmentation; re-train on 3,000–5,000 pairs | BLEU > 25 |
+| 2 — Data expansion (Nov–Dec 2026) | Hold out a test set at pair level and report BLEU and chrF with confidence intervals; scrape more VOV4 and Báo Đắk Lắk articles; back-translation and augmentation; re-train on 3,000–5,000 pairs | Held-out BLEU > 25 |
 | 3 — Multimodal integration (Dec 2026–Jan 2027) | Add VITS text-to-speech; package as a web/mobile demo | End-to-end text + speech demo |
 | 4 — Field evaluation | Trials with native speakers in Đắk Lắk; interface refinement | MOS > 4.0 |
 
