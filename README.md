@@ -25,7 +25,7 @@ Ede is an Austronesian (Chamic) language spoken by roughly 400,000 people in the
 
 **Contributions**
 
-1. **Closed-loop data pipeline:** scraping of public Ede-language news → Unicode NFC normalization → LLM-assisted sentence pairing → bidirectional augmentation (**408 sentence pairs → 816 training samples**).
+1. **Closed-loop data pipeline:** scraping of public Ede-language news → Unicode NFC normalization → LLM-assisted Ede–Vietnamese pairing → bidirectional augmentation (**408 pairs → 816 training samples**; corpus composition in §3.1).
 2. **Proxy-language fine-tuning:** Ede has no NLLB language token, so Indonesian (`ind_Latn`) is used as the source-side proxy and Vietnamese (`vie_Latn`) as the target, fine-tuning `facebook/nllb-200-distilled-600M`.
 3. **Memory-bounded training recipe:** batch size 1 × gradient accumulation 8 with fp16 trains the 600M-parameter model on a single Colab T4 (16 GB) without out-of-memory errors.
 4. **Quantified result:** validation loss falls from 4.709 to 2.888 over 328 optimizer steps; SacreBLEU reaches **12.46 / 100**. Qualitative analysis shows the model is **not yet reliable at sentence level** (see §4.3 and §7).
@@ -42,9 +42,10 @@ Ede is an Austronesian (Chamic) language spoken by roughly 400,000 people in the
                   v
 +-----------------------------------+
 | 1. Web scraping                   |  requests + BeautifulSoup4
-|    article-link regex filter      |  category / audio pages dropped
+|    22 curated article URLs        |  <p> text split into sentences,
+|                                   |  short / boilerplate lines dropped
 +-----------------+-----------------+
-                  | raw Ede text (CSV, utf-8-sig)
+                  | raw Ede text: 281 sentences (CSV, utf-8-sig)
                   v
 +-----------------------------------+
 | 2. Cleaning & normalization       |  Unicode NFC, HTML / regex cleanup,
@@ -55,7 +56,7 @@ Ede is an Austronesian (Chamic) language spoken by roughly 400,000 people in the
 | 3. Pairing / labeling             |  Gemini 1.5 Flash, structured JSON
 |    + manual cross-check           |  output -> Ede-Vietnamese CSV
 +-----------------+-----------------+
-                  | 408 sentence pairs
+                  | 408 Ede-Vietnamese pairs
                   v
 +-----------------------------------+
 | 4. Bidirectional augmentation     |  swap source <-> target
@@ -87,9 +88,10 @@ Ede is an Austronesian (Chamic) language spoken by roughly 400,000 people in the
 | Step | Implementation |
 | :--- | :--- |
 | **Source** | Ede-language service of VOV4 (`vov4.vov.vn/ede`). The Ede page of Báo Đắk Lắk (`baodaklak.vn/tieng-e-de`) is identified as an additional source for Stage 2. |
-| **Scraping** | `requests` + `BeautifulSoup4`; article URLs are selected by a regular expression on the numeric article-ID suffix so that category pages and audio pages are excluded. |
-| **Normalization** | `unicodedata.normalize('NFC', text)` to unify composed and decomposed forms of Ede-specific characters (ê, ô, ơ, ư, ƀ, č, đ, ñ, ğ); regex removal of HTML remnants; sentence segmentation on standard punctuation. |
+| **Scraping** | [`src/data_scraper.py`](./src/data_scraper.py) uses `requests` + `BeautifulSoup4` over a **curated list of 22 VOV4 article URLs**. Paragraph text is split into sentences on `.`, `!` and `?`; sentences of 30 characters or fewer and site-licence boilerplate are dropped. The run yields **281 raw Ede sentences** ([`data/raw/`](./data/raw/ede_raw_from_scraper.csv)). |
+| **Normalization** | `unicodedata.normalize('NFC', text)` to unify composed and decomposed forms of Ede-specific characters (ê, ô, ơ, ư, ƀ, č, đ, ñ, ğ). All released CSV files are NFC-normalized (checked: 0 non-NFC rows). |
 | **Pairing** | Gemini 1.5 Flash (`gemini-1.5-flash`) with structured-JSON output produces aligned Ede–Vietnamese pairs, written to CSV with `utf-8-sig`. The team read the exported pairs for meaning and font errors. |
+| **Corpus composition** | [`data/processed/`](./data/processed/ede_vi_parallel_corpus.csv) holds **408 pairs**: IDs 001–281 are the scraped sentences (median 31 Ede words); IDs 282–408 are **127 additional entries**, of which 98 have five words or fewer (mostly single words and short phrases with dictionary-style Vietnamese glosses) and 29 are longer sentences. |
 | **Augmentation** | Each pair is used in both directions (Ede → Vietnamese and Vietnamese → Ede): 408 pairs → **816 samples**. |
 
 ### 3.2 Proxy Language Code
@@ -117,9 +119,7 @@ No controlled comparison against other proxy codes was run (see §7).
 
 Training minimizes the token-level cross-entropy
 
-```math
-\(\mathcal{L}(\theta) = -\frac{1}{T}\sum_{t=1}^{T}\log p_{\theta}\left\)(y_t \(\mid y_{<t}, \, x\right\))
-```
+$$\mathcal{L}(\theta) = -\frac{1}{T}\sum_{t=1}^{T}\log p_{\theta}\left(y_t \mid y_{<t},\, x\right)$$
 
 and gradient accumulation gives an effective batch size $B_{\text{eff}} = 1 \times 8 = 8$ while keeping peak GPU memory at the batch-size-1 level.
 
@@ -176,14 +176,16 @@ The outputs are fluent Vietnamese but **semantically unfaithful**, with repeated
 ```text
 PIISE_Ede_Vietnamese_Multimodal_NMT/
 ├── README.md
+├── LICENSE
 ├── requirements.txt
+├── .gitignore
 ├── data/
 │   ├── raw/
-│   │   └── ede_raw_from_scraper.csv            # Scraped Ede text (VOV4)
+│   │   └── ede_raw_from_scraper.csv            # 281 scraped Ede sentences (VOV4)
 │   └── processed/
-│       └── ede_vi_parallel_corpus.csv          # Labeled Ede–Vietnamese pairs (408)
+│       └── ede_vi_parallel_corpus.csv          # 408 Ede–Vietnamese pairs (id, text_ede, text_vi)
 ├── src/
-│   ├── data_scraper.py                         # VOV4 scraper
+│   ├── data_scraper.py                         # VOV4 scraper (22 curated URLs)
 │   └── plot_training_curves.py                 # Training / validation loss plot
 ├── notebooks/
 │   └── nllb200_ede_vi_finetune.ipynb           # Colab: fine-tuning, BLEU, Gradio demo
@@ -212,23 +214,19 @@ Fine-tuning was run on a Google Colab **T4 GPU (16 GB)**. A local GPU with at le
 
 ### 6.2 Reproducing the Pipeline
 
-1. **Collect raw Ede text** (optional — the scraped CSV is already provided in `data/raw/`):
+1. **Collect raw Ede text** (optional — the scraped CSV is already provided in `data/raw/`). Run from the repository root:
 
    ```bash
    python src/data_scraper.py
    ```
 
-2. **Label Ede–Vietnamese pairs.** The labeling step calls the Gemini API. Provide your own key and never commit it:
+   This rewrites `data/raw/ede_raw_from_scraper.csv` from the 22 article URLs listed in the script. Web pages can change or disappear, so a fresh run may not return exactly the same sentences.
 
-   ```bash
-   export GEMINI_API_KEY="your-key-here"
-   ```
-
-   The processed corpus is already provided in `data/processed/`, so downstream steps do not require re-running this step. Model availability and outputs from hosted LLM APIs can change over time; re-labeling may therefore not reproduce the exact pairs.
+2. **Ede–Vietnamese pairs.** Pair labeling was done with the Gemini API and cross-checked by the team (§3.1). The labeling prompt and script are not part of `src/`; the resulting corpus is provided in `data/processed/`, so all downstream steps can be reproduced without repeating this step. Outputs of hosted LLM APIs change over time, so re-labeling would not reproduce the exact pairs.
 
 3. **Fine-tune and evaluate.** Open `notebooks/nllb200_ede_vi_finetune.ipynb` in Google Colab, select a **T4 GPU** runtime, and run all cells. The notebook uses the configuration in §3.3 and reports validation loss every 10 steps and SacreBLEU at the end.
 
-4. **Plot the loss curves:**
+4. **Plot the loss curves** (run from the repository root; the figure is saved to `results/`):
 
    ```bash
    python src/plot_training_curves.py
@@ -236,13 +234,13 @@ Fine-tuning was run on a Google Colab **T4 GPU (16 GB)**. A local GPU with at le
 
 ### 6.3 Data Notice
 
-The Ede text originates from publicly accessible VOV4 articles and is used strictly for **non-commercial research**; all rights to the original articles remain with the publisher. The Vietnamese side was produced with LLM assistance (§8) and is not an official translation.
+The Ede text originates from publicly accessible VOV4 articles and is used strictly for **non-commercial research**; all rights to the original articles remain with the publisher. The Vietnamese side was produced with LLM assistance (§8) and is not an official translation. The MIT License in this repository covers the **source code only**; it does not grant rights to the article text, the corpus, or the documents in `docs/`.
 
 ---
 
 ## 7. Scope, Limitations & Caveats
 
-1. **Corpus size and domain.** 408 pairs from a single news outlet (mostly economic and agricultural topics, written register). Results say nothing about conversational Ede or other orthographic conventions.
+1. **Corpus size, composition and domain.** 408 pairs, mostly from a single news outlet (economic, agricultural and social topics, written register). About a third (127 pairs) are short entries rather than full sentences (§3.1), so "408 pairs" should not be read as 408 news sentences. Results say nothing about conversational Ede or other orthographic conventions.
 2. **Silver-standard references.** The Vietnamese side was produced with Gemini assistance and cross-checked by the team. No validation by native Ede speakers or professional translators is documented, so BLEU measures agreement with these labels rather than with expert translations.
 3. **Thin evaluation.** A single aggregate BLEU (12.46) was computed over 15 evaluation batches, with no confidence interval, repeated seeds, or per-direction (Ede → Vietnamese vs. Vietnamese → Ede) breakdown. No numeric zero-shot BLEU was recorded, so the improvement over the base model is supported qualitatively (the untuned model copies its input), not quantitatively.
 4. **Poor sentence-level fidelity.** Outputs are fluent but often wrong and repetitive (§4.3).
@@ -293,3 +291,9 @@ The Ede text originates from publicly accessible VOV4 articles and is used stric
   note        = {PIISE Research Program, Board B (Research Idea)}
 }
 ```
+
+---
+
+## 9. License
+
+Source code is released under the **MIT License** (see [`LICENSE`](./LICENSE)). Data and documents are subject to the notice in §6.3.
