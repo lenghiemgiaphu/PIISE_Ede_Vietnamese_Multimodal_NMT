@@ -13,3 +13,4 @@ evaluate>=0.4
 sacrebleu>=2.4
 pandas>=2.0
 gradio>=4.0
+tqdm>=4.66
